@@ -9,6 +9,24 @@ app.use(express.json());
 
 const PORT = process.env.PORT || 3000;
 
+
+// FUNÇÃO AUXILIAR: SIMULADOR DE PUSH NOTIFICATION
+
+function enviarNotificacaoPush(nomeCuidador, nomePaciente, nomeRemedio, status) {
+  console.log('\n==================================================');
+  console.log(`📱 [PUSH NOTIFICATION] Enviando alerta para: ${nomeCuidador}`);
+  if (status === 'Atrasado') {
+    console.log(`⚠️ ALERTA DE EMERGÊNCIA: ${nomePaciente} está atrasado(a) com o remédio: ${nomeRemedio}!`);
+  } else {
+    console.log(`✅ AVISO: ${nomePaciente} tomou o remédio: ${nomeRemedio} no prazo.`);
+  }
+  console.log('==================================================\n');
+}
+
+
+// ROTAS DA API
+
+
 // 1. ROTA PRINCIPAL DE TESTE
 app.get('/', (req, res) => {
   res.send('API do Dispenser de Remédios Rodando! 💊');
@@ -80,6 +98,7 @@ app.post('/api/dispositivo/confirmacao', async (req, res) => {
       status = 'Atrasado';
     }
 
+    // 1. Salva a dose no histórico
     const querySQL = `
       INSERT INTO historico_doses (id_dispositivo, nome_remedio, horario_programado, horario_tomado, status)
       VALUES ($1, $2, $3, $4, $5)
@@ -89,10 +108,18 @@ app.post('/api/dispositivo/confirmacao', async (req, res) => {
     const valores = [id_dispositivo, nome_remedio, programado, agora, status];
     const resultado = await db.query(querySQL, valores);
 
-    console.log(`[LOG] Remédio ${nome_remedio} registrado como: ${status}`);
+    // 2. Busca o nome do paciente e do cuidador no banco para personalizar a notificação
+    const queryDispositivo = 'SELECT nome_paciente, nome_cuidador FROM dispositivos WHERE id_dispositivo = $1';
+    const dadosDispositivo = await db.query(queryDispositivo, [id_dispositivo]);
+    
+    // Se o dispositivo existir no banco, envia o Push simulado
+    if (dadosDispositivo.rows.length > 0) {
+      const { nome_cuidador, nome_paciente } = dadosDispositivo.rows[0];
+      enviarNotificacaoPush(nome_cuidador, nome_paciente, nome_remedio, status);
+    }
 
     return res.status(201).json({
-      mensagem: 'Histórico registrado com sucesso!',
+      mensagem: 'Histórico registrado e cuidador notificado!',
       dados: resultado.rows[0]
     });
   } catch (error) {
