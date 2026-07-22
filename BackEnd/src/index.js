@@ -112,7 +112,6 @@ app.post('/api/dispositivo/confirmacao', async (req, res) => {
     const queryDispositivo = 'SELECT nome_paciente, nome_cuidador FROM dispositivos WHERE id_dispositivo = $1';
     const dadosDispositivo = await db.query(queryDispositivo, [id_dispositivo]);
     
-    // Se o dispositivo existir no banco, envia o Push simulado
     if (dadosDispositivo.rows.length > 0) {
       const { nome_cuidador, nome_paciente } = dadosDispositivo.rows[0];
       enviarNotificacaoPush(nome_cuidador, nome_paciente, nome_remedio, status);
@@ -128,7 +127,7 @@ app.post('/api/dispositivo/confirmacao', async (req, res) => {
   }
 });
 
-// 5. ROTA: BUSCAR HISTÓRICO DE DOSES PARA OS GRÁFICOS (GET)
+// 5. ROTA: BUSCAR HISTÓRICO DE DOSES PARA OS GRÁFICOS 
 app.get('/api/dispositivo/:id/historico', async (req, res) => {
   const idDispositivo = req.params.id;
   try {
@@ -146,7 +145,30 @@ app.get('/api/dispositivo/:id/historico', async (req, res) => {
   }
 });
 
-// O LISTEN FICA SEMPRE NA ÚLTIMA LINHA DO ARQUIVO! 🏁
+// 6. ROTA: DELETAR UM MEDICAMENTO DA AGENDA 
+app.delete('/api/medicamentos/:id', async (req, res) => {
+  const idMedicamento = req.params.id;
+
+  try {
+    const querySQL = 'DELETE FROM horarios_medicamentos WHERE id = $1 RETURNING *;';
+    const resultado = await db.query(querySQL, [idMedicamento]);
+
+    if (resultado.rows.length === 0) {
+      return res.status(404).json({ erro: 'Medicamento não encontrado no banco.' });
+    }
+
+    return res.status(200).json({
+      mensagem: 'Medicamento removido com sucesso! 🗑️',
+      dadosDeletados: resultado.rows[0]
+    });
+
+  } catch (error) {
+    console.error('Erro ao deletar medicamento:', error);
+    return res.status(500).json({ erro: 'Erro interno ao deletar no banco de dados.' });
+  }
+});
+
+
 app.listen(PORT, () => {
   console.log(`Servidor rodando na porta ${PORT}`);
 });
