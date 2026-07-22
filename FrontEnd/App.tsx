@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { TamaguiProvider, YStack, XStack, Text } from 'tamagui';
 import { Pressable } from 'react-native';
@@ -7,26 +7,36 @@ import { Feather } from '@expo/vector-icons';
 import tamaguiConfig from './tamagui.config';
 import { ThemeProvider, useAppTheme } from './src/theme/ThemeContext';
 import { space } from './src/theme/tokens';
-import { patients } from './src/data/mockData';
+import { patients, scheduleSeedNotifications } from './src/data/mockData';
+import { setupNotifications } from './src/notifications';
 import ScreenTransition from './src/components/ScreenTransition';
 import DashboardScreen from './src/screens/DashboardScreen';
 import AddMedicationScreen from './src/screens/AddMedicationScreen';
+import ManageMedicationsScreen from './src/screens/ManageMedicationsScreen';
 import AlertScreen from './src/screens/AlertScreen';
 import ReportScreen from './src/screens/ReportScreen';
 
-export type ScreenName = 'dashboard' | 'add' | 'alert' | 'report';
-export type Navigate = (screen: ScreenName, doseId?: string) => void;
+export type ScreenName = 'dashboard' | 'add' | 'manage' | 'alert' | 'report';
+export type Navigate = (screen: ScreenName, doseId?: string, medicationId?: string) => void;
 
 function AppShell() {
   const { colors, isDark } = useAppTheme();
   const [screen, setScreen] = useState<ScreenName>('dashboard');
   const [activePatientId, setActivePatientId] = useState(patients[0].id);
   const [alertDoseId, setAlertDoseId] = useState<string | undefined>();
+  const [editMedicationId, setEditMedicationId] = useState<string | undefined>();
 
-  const navigate: Navigate = (next, doseId) => {
+  const navigate: Navigate = (next, doseId, medicationId) => {
     if (doseId) setAlertDoseId(doseId);
+    setEditMedicationId(medicationId);
     setScreen(next);
   };
+
+  useEffect(() => {
+    setupNotifications().then((granted) => {
+      if (granted) scheduleSeedNotifications();
+    });
+  }, []);
 
   const screenProps = { navigate, patientId: activePatientId, setActivePatientId };
 
@@ -39,8 +49,13 @@ function AppShell() {
           </ScreenTransition>
         )}
         {screen === 'add' && (
-          <ScreenTransition key="add">
-            <AddMedicationScreen {...screenProps} />
+          <ScreenTransition key={`add-${editMedicationId ?? 'new'}`}>
+            <AddMedicationScreen {...screenProps} medicationId={editMedicationId} />
+          </ScreenTransition>
+        )}
+        {screen === 'manage' && (
+          <ScreenTransition key="manage">
+            <ManageMedicationsScreen {...screenProps} />
           </ScreenTransition>
         )}
         {screen === 'alert' && (
