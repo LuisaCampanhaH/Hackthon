@@ -331,15 +331,25 @@ export default function DashboardScreen({
           padding={space.cardPadSm}
           {...shadow.card}
         >
-          <Text
-            fontSize={12.5}
-            fontWeight="700"
-            color={colors.textMuted}
-            textTransform="uppercase"
-            marginBottom={space.md}
-          >
-            Histórico de hoje
-          </Text>
+          <XStack alignItems="center" justifyContent="space-between" marginBottom={space.md}>
+            <Text
+              fontSize={12.5}
+              fontWeight="700"
+              color={colors.textMuted}
+              textTransform="uppercase"
+            >
+              Histórico de hoje
+            </Text>
+            <Pressable
+              onPress={() => navigate('manage')}
+              style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}
+            >
+              <Feather name="sliders" size={13} color={colors.primary} />
+              <Text fontSize={12.5} fontWeight="700" color={colors.primary}>
+                Gerenciar
+              </Text>
+            </Pressable>
+          </XStack>
           <YStack gap={2}>
             {patient.doseLog.map((dose) => {
               const med = getMedication(patient, dose.medicationId);

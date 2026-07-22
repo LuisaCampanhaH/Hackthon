@@ -6,8 +6,8 @@ import DateTimePicker, { type DateTimePickerEvent } from '@react-native-communit
 
 import { useAppTheme } from '../theme/ThemeContext';
 import { radii, shadow, space } from '../theme/tokens';
-import { addMedication, getPatient } from '../data/mockData';
-import type { Navigate } from '../../App';
+import { addMedication, getMedication, getPatient, updateMedication } from '../data/mockData';
+import type { Navigate, ScreenName } from '../../App';
 
 const FREQUENCIES = ['1x ao dia', '2x ao dia', '3x ao dia', 'A cada 8h', 'Outro'];
 
@@ -25,19 +25,23 @@ function inputStyle(colors: ReturnType<typeof useAppTheme>['colors']) {
 export default function AddMedicationScreen({
   navigate,
   patientId,
+  medicationId,
 }: {
   navigate: Navigate;
   patientId: string;
+  medicationId?: string;
 }) {
   const { colors, isDark } = useAppTheme();
   const patient = getPatient(patientId);
+  const existing = medicationId ? getMedication(patient, medicationId) : undefined;
+  const backTarget: ScreenName = medicationId ? 'manage' : 'dashboard';
 
-  const [name, setName] = useState('');
-  const [dosage, setDosage] = useState('');
+  const [name, setName] = useState(existing?.name ?? '');
+  const [dosage, setDosage] = useState(existing?.dosage ?? '');
   const [freq, setFreq] = useState(FREQUENCIES[0]);
   const [customFreq, setCustomFreq] = useState('');
-  const [times, setTimes] = useState<string[]>([]);
-  const [stock, setStock] = useState(30);
+  const [times, setTimes] = useState<string[]>(existing?.times ?? []);
+  const [stock, setStock] = useState(existing?.stock ?? 30);
   const [draftTime, setDraftTime] = useState(new Date());
   const [showPicker, setShowPicker] = useState(false);
   const [toastVisible, setToastVisible] = useState(false);
@@ -70,19 +74,24 @@ export default function AddMedicationScreen({
 
   function handleSave() {
     if (!canSave) return;
-    addMedication(patientId, {
+    const input = {
       name: name.trim(),
       dosage: dosage.trim(),
       stock,
       times: times.length ? times : ['08:00'],
-    });
+    };
+    if (medicationId) {
+      updateMedication(patientId, medicationId, input);
+    } else {
+      addMedication(patientId, input);
+    }
     setToastVisible(true);
   }
 
   useEffect(() => {
     if (!toastVisible) return;
     Animated.timing(toastAnim, { toValue: 1, duration: 220, useNativeDriver: true }).start();
-    const id = setTimeout(() => navigate('dashboard'), 1300);
+    const id = setTimeout(() => navigate(backTarget), 1300);
     return () => clearTimeout(id);
     // navigate is a fresh closure every render; only toastVisible should retrigger this
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -98,7 +107,7 @@ export default function AddMedicationScreen({
           gap={14}
         >
           <Pressable
-            onPress={() => navigate('dashboard')}
+            onPress={() => navigate(backTarget)}
             style={{
               width: 44,
               height: 44,
@@ -112,7 +121,7 @@ export default function AddMedicationScreen({
           </Pressable>
           <YStack>
             <Text fontSize={19} fontWeight="800" color={colors.textPrimary}>
-              Novo Medicamento
+              {medicationId ? 'Editar Medicamento' : 'Novo Medicamento'}
             </Text>
             <Text fontSize={13} color={colors.textSecondary}>
               Para {patient.name}
@@ -372,7 +381,7 @@ export default function AddMedicationScreen({
                 {...shadow.hero}
               >
                 <Text color={colors.onPrimary} fontSize={17} fontWeight="700">
-                  Salvar Configuração
+                  {medicationId ? 'Salvar Alterações' : 'Salvar Configuração'}
                 </Text>
               </YStack>
             </Pressable>
@@ -406,7 +415,9 @@ export default function AddMedicationScreen({
           >
             <Feather name="check" size={16} color={colors.successText} />
             <Text fontSize={14.5} fontWeight="700" color={colors.successText}>
-              Medicamento salvo com sucesso
+              {medicationId
+                ? 'Medicamento atualizado com sucesso'
+                : 'Medicamento salvo com sucesso'}
             </Text>
           </XStack>
         </Animated.View>

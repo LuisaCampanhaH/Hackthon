@@ -1,6 +1,8 @@
 // Simulated global app state. The ESP32 box will replace this with real
 // device telemetry later — for now it's just an in-memory mock store.
 
+import { cancelDoseNotifications, scheduleDoseNotifications } from '../notifications';
+
 export interface DeviceStatus {
   online: boolean;
   syncLabel: string;
@@ -22,6 +24,8 @@ export interface DoseLogEntry {
   scheduledTime: string; // "HH:mm"
   status: DoseStatus;
   takenAt?: string; // "HH:mm"
+  notifyId?: string; // scheduled local notification for the dose time
+  lateNotifyId?: string; // scheduled local notification for the late reminder
 }
 
 export interface Patient {
@@ -100,22 +104,80 @@ export function addMedication(
   const med: Medication = { ...input, id: `med-${Date.now()}` };
   patient.medications.push(med);
   med.times.forEach((time) => {
-    patient.doseLog.push({
+    const dose: DoseLogEntry = {
       id: `dose-${Date.now()}-${time}`,
       medicationId: med.id,
       scheduledTime: time,
       status: 'pending',
-    });
+    };
+    patient.doseLog.push(dose);
+    scheduleDoseNotifications(med.name, med.dosage, time).then((ids) => Object.assign(dose, ids));
   });
   return med;
+}
+
+export function updateMedication(
+  patientId: string,
+  medicationId: string,
+  input: { name: string; dosage: string; stock: number; times: string[] }
+) {
+  const patient = getPatient(patientId);
+  const med = getMedication(patient, medicationId);
+  if (!med) return;
+  Object.assign(med, input);
+  // Re-derive today's pending occurrences from the new schedule; taken/late
+  // entries already logged stay as history.
+  const stale = patient.doseLog.filter(
+    (d) => d.medicationId === medicationId && d.status === 'pending'
+  );
+  stale.forEach(cancelDoseNotifications);
+  patient.doseLog = patient.doseLog.filter(
+    (d) => d.medicationId !== medicationId || d.status !== 'pending'
+  );
+  input.times.forEach((time) => {
+    const dose: DoseLogEntry = {
+      id: `dose-${Date.now()}-${time}`,
+      medicationId,
+      scheduledTime: time,
+      status: 'pending',
+    };
+    patient.doseLog.push(dose);
+    scheduleDoseNotifications(med.name, med.dosage, time).then((ids) => Object.assign(dose, ids));
+  });
+}
+
+export function deleteMedication(patientId: string, medicationId: string) {
+  const patient = getPatient(patientId);
+  patient.doseLog
+    .filter((d) => d.medicationId === medicationId && d.status === 'pending')
+    .forEach(cancelDoseNotifications);
+  patient.medications = patient.medications.filter((m) => m.id !== medicationId);
+  patient.doseLog = patient.doseLog.filter((d) => d.medicationId !== medicationId);
 }
 
 export function markDoseTaken(patientId: string, doseId: string) {
   const dose = getPatient(patientId).doseLog.find((d) => d.id === doseId);
   if (dose) {
+    cancelDoseNotifications(dose);
     dose.status = 'taken';
     dose.takenAt = new Date().toTimeString().slice(0, 5);
   }
+}
+
+// Seed data has pending doses created without going through addMedication,
+// so they have no notifications yet — schedule them once at app startup.
+export function scheduleSeedNotifications() {
+  patients.forEach((patient) => {
+    patient.doseLog
+      .filter((d) => d.status === 'pending' && !d.notifyId)
+      .forEach((dose) => {
+        const med = getMedication(patient, dose.medicationId);
+        if (!med) return;
+        scheduleDoseNotifications(med.name, med.dosage, dose.scheduledTime).then((ids) =>
+          Object.assign(dose, ids)
+        );
+      });
+  });
 }
 
 export function getMedication(patient: Patient, medicationId: string) {
